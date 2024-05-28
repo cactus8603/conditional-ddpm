@@ -108,7 +108,7 @@ class CrossAttention(nn.Module):
         return attn_output
 
 class ContextUNet(nn.Module):
-    def __init__(self, in_channels, height, width, n_feat, n_cfeat, n_downs=2):
+    def __init__(self, in_channels=1, height=256, width=256, n_feat=64, n_cfeat=10, n_downs=4):
         super(ContextUNet, self).__init__()
         self.in_channels = in_channels
         self.height = height
