@@ -1,5 +1,6 @@
 import torch
 import math
+import os
 from tqdm import tqdm
 from torch.nn import functional as F
 from torch.cuda import amp
@@ -36,35 +37,14 @@ def perturb_input(x, t, noise, ab_t):
         """
         return ab_t.sqrt()[t, None, None, None] * x + (1 - ab_t[t, None, None, None]).sqrt() * noise
 
-# def cosine_beta_schedule(timesteps, s=0.008):
-#     """
-#     Cosine beta schedule for diffusion process.
-#     Args:
-#         timesteps (int): Number of diffusion steps.
-#         s (float): Small constant for numerical stability.
-#     Returns:
-#         betas (torch.Tensor): Beta values for each timestep.
-#     """
-#     steps = torch.arange(timesteps + 1, dtype=torch.float64)
-#     alphas_cumprod = torch.cos(((steps / timesteps) + s) / (1 + s) * math.pi * 0.5) ** 2
-#     alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
-#     betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
-#     return betas
-
-# def diffusion_loss(model, input_images, target_images, t, noise_level):
-#     noisy_input_images, noise, target_images = prepare_data(input_images, target_images, noise_level)
-#     pred_noise = model(noisy_input_images, t, target_images)
-#     loss = F.mse_loss(pred_noise, noise)
-#     return loss
-
-def train_one_epoch(model, optimizer, dataloader, epoch, scaler, scheduler, device, arg):
+def train_one_epoch(model, optimizer, dataloader, scaler, scheduler, device, arg):
     model.train()
-    loss_function = torch.nn.MSELoss()
-    optimizer.zero_grad()
-
+    # loss_function = torch.nn.MSELoss()
+    
     a_t, b_t, ab_t = get_ddpm_noise_schedule(arg.timesteps, device=device, initial_beta=1e-4, final_beta=0.02)
 
-    pbar = tqdm(dataloader)
+    # pbar = tqdm(dataloader)
+    optimizer.zero_grad()
     running_loss = 0.0
     
     for i, (input_img, target_img) in enumerate(dataloader):
@@ -77,7 +57,7 @@ def train_one_epoch(model, optimizer, dataloader, epoch, scaler, scheduler, devi
 
         with amp.autocast():
             # pred noise
-            predict_noise = model(x_pert, t / arg.timesteps, )
+            predict_noise = model(x_pert, t / arg.timesteps, target_image=target_img)
             # get loss
             loss = F.mse_loss(predict_noise, noise)
         
@@ -93,43 +73,9 @@ def train_one_epoch(model, optimizer, dataloader, epoch, scaler, scheduler, devi
             
     scheduler.step()
     average_loss = running_loss / len(dataloader)
-    pbar.desc = "epoch:{}, loss:{:.5f}".format(epoch, average_loss)
-    pbar.update(1)
+    # pbar.desc = "epoch:{}, loss:{:.5f}".format(epoch, average_loss)
+    # pbar.update(1)
 
     return average_loss
 
-    # 
-
-    # print(f'Epoch [{epoch+1}], Loss: {avg_loss:.4f}')
-
-    # noise_level = torch.tensor(0.1)  # Example noise level
-    # noisy_input_img, noise, target_img = prepare_data(input_img, target_img, noise_level)
-    # pred_noise = model(noisy_input_img, t, target_img)
-    # loss = F.mse_loss(pred_noise, noise)
-    # loss.backward()
-    # optimizer.step()
-    # return loss.item()
-
-def train(model, dataloader, optimizer, arg):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1, end_factor=0.01, total_iters=50)
-    scaler = amp.GradScaler()
-    pbar = tqdm(dataloader)
-    for epoch in range(arg.num_epochs):
-
-        # training model, optimizer, dataloader, epoch, scaler, scheduler, device, arg
-        loss = train_one_epoch(
-            model = model, 
-            optimizer = optimizer, 
-            dataloader = dataloader, 
-            epoch = epoch, 
-            scaler = scaler,
-            scheduler = scheduler,
-            device = device,
-            arg = arg
-        )
-
-        pbar.desc = "epoch:{}, loss:{:.4f}".format(epoch, loss)
-        pbar.update(1)
 

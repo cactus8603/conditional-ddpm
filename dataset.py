@@ -4,6 +4,8 @@ import numpy as np
 import json
 from torch.utils.data import Dataset
 import albumentations as A
+from glob import glob
+import os
 
 from torchvision.transforms import transforms
 from torchvision.transforms import Compose, Resize, ToTensor, ToPILImage, Normalize
@@ -14,8 +16,8 @@ class TrainImageDataset(Dataset):
     """
     def __init__(self, input_image_path, target_image_path):
         super().__init__()
-        self.input_image_path = input_image_path
-        self.target_image_path = target_image_path
+        self.input_image_path = sorted(glob(os.path.join(input_image_path, '*')))
+        self.target_image_path = sorted(glob(os.path.join(target_image_path, '*'))) 
 
         self.transform = A.Compose([
             A.resize(256, 256), 
@@ -59,8 +61,8 @@ class ValImageDataset(Dataset):
     """
     def __init__(self, input_image_path, target_image_path):
         super().__init__()
-        self.input_image_path = input_image_path
-        self.target_image_path = target_image_path
+        self.input_image_path = sorted(glob(os.path.join(input_image_path, '*')))
+        self.target_image_path = sorted(glob(os.path.join(target_image_path, '*'))) 
 
         self.transform = A.Compose([
             A.resize(256, 256), 
