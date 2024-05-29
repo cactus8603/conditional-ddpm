@@ -1,7 +1,9 @@
 import torch
 import math
-from torch.nn import functional as F
 from tqdm import tqdm
+from torch.nn import functional as F
+from torch.cuda import amp
+from torch.cuda.amp import autocast as autocast
 
 def prepare_data(input_images, target_images, noise_level):
     noise = torch.randn_like(input_images)
@@ -55,38 +57,49 @@ def perturb_input(x, t, noise, ab_t):
 #     loss = F.mse_loss(pred_noise, noise)
 #     return loss
 
-def train_one_epoch(model, optimizer, dataloader, epoch, device):
+def train_one_epoch(model, optimizer, dataloader, epoch, scaler, scheduler, device, arg):
     model.train()
     loss_function = torch.nn.MSELoss()
     optimizer.zero_grad()
 
-    a_t, b_t, ab_t = get_ddpm_noise_schedule(timesteps=1000, device=device, initial_beta=1e-4, final_beta=0.02)
+    a_t, b_t, ab_t = get_ddpm_noise_schedule(arg.timesteps, device=device, initial_beta=1e-4, final_beta=0.02)
 
     pbar = tqdm(dataloader)
-    total_loss = 0.0
+    running_loss = 0.0
     
-    for input_img, target_img in enumerate(dataloader):
-        # input_img, target_img = input_img.to(device), target_img.to(device)
+    for i, (input_img, target_img) in enumerate(dataloader):
+        input_img, target_img = input_img.to(device), target_img.to(device)
         
-
-        ###
-        # noise_level = torch.tensor(0.1)  # Example noise level
-        # noisy_input_img, noise, target_img = prepare_data(input_img, target_img, noise_level)
-        # pred_noise = model(noisy_input_img, t, target_img)
-
         ### 
         noise = torch.rand_like(input_img)
-        t = torch.randint(0, 1000, (input_img.size(0),), device=input_img.device)
-        x_noise = perturb_input(input_img, t, noise, ab_t)
+        t = torch.randint(0, 1000, (input_img.shape[0],), device=input_img.device)
+        x_pert = perturb_input(input_img, t, noise, ab_t)
 
-        loss = F.mse_loss(pred_noise, noise)
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
+        with amp.autocast():
+            # pred noise
+            predict_noise = model(x_pert, t / arg.timesteps, )
+            # get loss
+            loss = F.mse_loss(predict_noise, noise)
+        
+        scaler.scale(loss).backward()
 
-        total_loss += loss
+        if (i + 1) % arg.accumulation_steps == 0:
+            # upgrade params
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad()
 
-    avg_loss = total_loss / len(dataloader)
+        running_loss += loss.item() * arg.accumulation_steps
+            
+    scheduler.step()
+    average_loss = running_loss / len(dataloader)
+    pbar.desc = "epoch:{}, loss:{:.5f}".format(epoch, average_loss)
+    pbar.update(1)
+
+    return average_loss
+
+    # 
+
     # print(f'Epoch [{epoch+1}], Loss: {avg_loss:.4f}')
 
     # noise_level = torch.tensor(0.1)  # Example noise level
@@ -97,18 +110,26 @@ def train_one_epoch(model, optimizer, dataloader, epoch, device):
     # optimizer.step()
     # return loss.item()
 
-def train(model, dataloader, optimizer, num_epochs):
+def train(model, dataloader, optimizer, arg):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    for epoch in range(num_epochs):
-        total_loss = 0.0
-        pbar = tqdm(dataloader)
-        for input_img, target_img in enumerate(dataloader):
-            # t = torch.randint(0, 1000, (input_img.size(0),), device=input_img.device)  # Example time steps
-            loss = train_one_epoch(model, optimizer, dataloader, epoch, device)
-            total_loss += loss
+    scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1, end_factor=0.01, total_iters=50)
+    scaler = amp.GradScaler()
+    pbar = tqdm(dataloader)
+    for epoch in range(arg.num_epochs):
 
-        avg_loss = total_loss / len(dataloader)
-        pbar.desc = "epoch:{}, loss:{:.4f}".format(epoch, avg_loss)
+        # training model, optimizer, dataloader, epoch, scaler, scheduler, device, arg
+        loss = train_one_epoch(
+            model = model, 
+            optimizer = optimizer, 
+            dataloader = dataloader, 
+            epoch = epoch, 
+            scaler = scaler,
+            scheduler = scheduler,
+            device = device,
+            arg = arg
+        )
+
+        pbar.desc = "epoch:{}, loss:{:.4f}".format(epoch, loss)
         pbar.update(1)
 
