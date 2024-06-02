@@ -54,7 +54,6 @@ class TrainImageDataset(Dataset):
 
 
 
-
 class ValImageDataset(Dataset):
     """
     image format: 512*512

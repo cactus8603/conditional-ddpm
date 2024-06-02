@@ -86,6 +86,9 @@ if __name__ == '__main__':
     scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1, end_factor=0.01, total_iters=50)
     scaler = amp.GradScaler()
 
+    denoiser = ContextUNet()
+    diffusion = (model=denoiser)
+
     pbar = tqdm(trainloader)
     tmp_loss = 999
     for epoch in range(arg.num_epochs):
@@ -94,7 +97,7 @@ if __name__ == '__main__':
         loss = train_one_epoch(
             model = model, 
             optimizer = optimizer, 
-            dataloader = trainloader, 
+            dataloader = trainloader,                        
             scaler = scaler,
             scheduler = scheduler,
             device = device,

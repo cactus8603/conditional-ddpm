@@ -6,6 +6,8 @@ from torch.nn import functional as F
 from torch.cuda import amp
 from torch.cuda.amp import autocast as autocast
 
+from diffusion import diffusion
+
 def prepare_data(input_images, target_images, noise_level):
     noise = torch.randn_like(input_images)
     noisy_input_images = input_images + noise_level * noise
@@ -37,8 +39,9 @@ def perturb_input(x, t, noise, ab_t):
         """
         return ab_t.sqrt()[t, None, None, None] * x + (1 - ab_t[t, None, None, None]).sqrt() * noise
 
-def train_one_epoch(model, optimizer, dataloader, scaler, scheduler, device, arg):
-    model.train()
+def train_one_epoch(denoiser, optimizer, dataloader, scaler, scheduler, device, arg):
+    # model.train()
+    diffusion = diffusion(model=denoiser)
     # loss_function = torch.nn.MSELoss()
     
     a_t, b_t, ab_t = get_ddpm_noise_schedule(arg.timesteps, device=device, initial_beta=1e-4, final_beta=0.02)
@@ -50,16 +53,13 @@ def train_one_epoch(model, optimizer, dataloader, scaler, scheduler, device, arg
     for i, (input_img, target_img) in enumerate(dataloader):
         input_img, target_img = input_img.to(device), target_img.to(device)
         
-        ### 
-        noise = torch.rand_like(input_img)
-        t = torch.randint(0, 1000, (input_img.shape[0],), device=input_img.device)
-        x_pert = perturb_input(input_img, t, noise, ab_t)
+        
 
         with amp.autocast():
             # pred noise
-            predict_noise = model(x_pert, t / arg.timesteps, target_image=target_img)
+            x_pert, predict_noise, x_denoise, loss = diffusion(input_img, target_img)
             # get loss
-            loss = F.mse_loss(predict_noise, noise)
+            # loss = F.mse_loss(predict_noise, noise)
         
         scaler.scale(loss).backward()
 
@@ -70,6 +70,10 @@ def train_one_epoch(model, optimizer, dataloader, scaler, scheduler, device, arg
             optimizer.zero_grad()
 
         running_loss += loss.item() * arg.accumulation_steps
+    
+    diffusion.save_tensor_images(input_img, x_pert, x_denoise, )
+    
+
             
     scheduler.step()
     average_loss = running_loss / len(dataloader)
