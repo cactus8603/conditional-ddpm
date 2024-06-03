@@ -39,7 +39,7 @@ def perturb_input(x, t, noise, ab_t):
         """
         return ab_t.sqrt()[t, None, None, None] * x + (1 - ab_t[t, None, None, None]).sqrt() * noise
 
-def train_one_epoch(diffusion, optimizer, dataloader, scaler, scheduler, device, arg):
+def train_one_epoch(diffusion, optimizer, dataloader, scaler, scheduler, epoch, device, arg):
     # model.train()
     # diffusion = diffusion(model=denoiser)
     # loss_function = torch.nn.MSELoss()
@@ -71,7 +71,7 @@ def train_one_epoch(diffusion, optimizer, dataloader, scaler, scheduler, device,
 
         running_loss += loss.item() * arg.accumulation_steps
     
-    diffusion.save_tensor_images(input_img, x_pert, x_denoise, )
+    diffusion.save_tensor_images(input_img, x_pert, x_denoise, epoch, arg.save_path)
     
 
             

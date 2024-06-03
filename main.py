@@ -10,6 +10,7 @@ from tensorboardX import SummaryWriter
 
 from utils import train_one_epoch
 from model import ContextUNet
+from diffusion import diffusion
 from dataset import TrainImageDataset, ValImageDataset
 
 def create_parser():
@@ -17,14 +18,14 @@ def create_parser():
 
     ### data path
     # parser.add_argument("--config_path", default="config.yaml", nargs='?', help="path to config file")
-    parser.add_argument("--data_path", default='./dataset`', type=str, help='') 
+    parser.add_argument("--data_path", default='./dataset', type=str, help='') 
     # parser.add_argument("--sample_set", default='./sample/test_style', type=str, help='')
-    parser.add_argument("--model_save_path", default='./result', type=str, help='path to save model and tbwriter')
+    parser.add_argument("--save_path", default='./result', type=str, help='path to save model and tbwriter')
     # parser.add_argument("--json_file", default='./cfgs/font_classes_50.json', type=str, help='')
 
     ### training setting
     parser.add_argument("--lr", default=1e-2, type=float, help='learning rate')
-    parser.add_argument("--epoch", default=200, type=int, help='total epoch')
+    parser.add_argument("--epochs", default=200, type=int, help='total epoch')
     parser.add_argument("--batch_size", default=32, type=int, help='total classes')
     
     parser.add_argument("--num_workers", default=6, type=int, help='')
@@ -57,9 +58,9 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # torch.cuda.set_device(device)
 
-    if not os.path.exists(arg.model_save_path):
-        os.mkdir(arg.model_save_path)
-    tb_writer = SummaryWriter(arg.model_save_path)
+    if not os.path.exists(arg.save_path):
+        os.mkdir(arg.save_path)
+    tb_writer = SummaryWriter(arg.save_path)
 
     model = ContextUNet()
 
@@ -86,12 +87,13 @@ if __name__ == '__main__':
     scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1, end_factor=0.01, total_iters=50)
     scaler = amp.GradScaler()
 
+    ### load model
     denoiser = ContextUNet()
     diffusion = diffusion(model=denoiser)
 
     pbar = tqdm(trainloader)
     tmp_loss = 999
-    for epoch in range(arg.num_epochs):
+    for epoch in range(arg.epochs):
         # denoiser, optimizer, dataloader, scaler, scheduler, device, arg
         # training 
         loss = train_one_epoch(
@@ -100,6 +102,7 @@ if __name__ == '__main__':
             dataloader = trainloader,                        
             scaler = scaler,
             scheduler = scheduler,
+            epoch = epoch,
             device = device,
             arg = arg
         )
@@ -111,7 +114,7 @@ if __name__ == '__main__':
 
         tb_writer.add_scalar('loss', loss, epoch)
         if loss < tmp_loss:
-            save_path = os.path.join(arg.model_save_path, "model_{}_{:.3f}_.pth".format(epoch, loss))
+            save_path = os.path.join(arg.save_path, "model_{}_{:.3f}_.pth".format(epoch, loss))
             torch.save(model, save_path)
             tmp_loss = loss
 
