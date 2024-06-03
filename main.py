@@ -55,7 +55,7 @@ if __name__ == '__main__':
     init(arg.seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    torch.cuda.set_device(device)
+    # torch.cuda.set_device(device)
 
     if not os.path.exists(arg.model_save_path):
         os.mkdir(arg.model_save_path)

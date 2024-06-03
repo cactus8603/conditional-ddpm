@@ -18,9 +18,10 @@ class TrainImageDataset(Dataset):
         super().__init__()
         self.input_image_path = sorted(glob(os.path.join(input_image_path, '*')))
         self.target_image_path = sorted(glob(os.path.join(target_image_path, '*'))) 
+        print(self.input_image_path)
 
         self.transform = A.Compose([
-            A.resize(256, 256), 
+            A.resize(256, 256, p=1, always_apply=True), 
             A.OneOf([
                 A.RandomSizedCrop(min_max_height=(128, 128), height=256, width=256, p=0.5),
                 A.PadIfNeeded(min_height=256, min_width=256, p=0.5)
@@ -64,7 +65,7 @@ class ValImageDataset(Dataset):
         self.target_image_path = sorted(glob(os.path.join(target_image_path, '*'))) 
 
         self.transform = A.Compose([
-            A.resize(256, 256), 
+            A.resize(256, 256, p=1, always_apply=True), 
             A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
             A.ToTensorV2()
         ])

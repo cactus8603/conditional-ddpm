@@ -60,7 +60,7 @@ class FCEmbedding(nn.Module):
         self.in_dim = in_dim
         layers = nn.Sequential(
             nn.Linear(in_dim, out_dim),
-            nn.GeLU(inplace=True),
+            nn.GELU(),
             nn.Linear(out_dim, out_dim)
         )
         self.model = nn.Sequential(*layers)
