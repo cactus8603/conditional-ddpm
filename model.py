@@ -158,7 +158,7 @@ class ContextUNet(nn.Module):
         # Define cross attention layer
         self.cross_attention = CrossAttention(d_model=2**n_downs * n_feat, nhead=8)
 
-    def forward(self, x, t, target_image):
+    def forward(self, x, t, condition_image):
         x = self.init_conv(x)
         downs = []
         for i, down_block in enumerate(self.down_blocks):
@@ -167,12 +167,12 @@ class ContextUNet(nn.Module):
         up = self.up0(self.to_vec(downs[-1]))
 
         # Add cross attention mechanism here
-        target_emb = self.contextembs[0](target_image).view(target_image.size(0), -1, 1, 1)  # Reshape context embedding to match feature map size
+        target_emb = self.contextembs[0](condition_image).view(condition_image.size(0), -1, 1, 1)  # Reshape context embedding to match feature map size
         up = self.cross_attention(up, target_emb)
 
         for i, (up_block, down, contextemb, timeemb) in enumerate(zip(self.up_blocks, downs[::-1], self.contextembs, self.timeembs)):
             if i == 0:
-                up = up_block(up * contextemb(target_image) + timeemb(t), down)
+                up = up_block(up * contextemb(condition_image) + timeemb(t), down)
             else:
                 up = up_block(up, down)
         return self.final_conv(torch.cat([up, downs[0]], axis=1))

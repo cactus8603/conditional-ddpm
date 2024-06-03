@@ -1,0 +1,10 @@
+### Input ###
+input image, target image (512*512)
+
+### data aug. ###
+
+### Model ###
+input noise and ori input image as condition,
+loss1 = MSE(pred noise, noise)
+loss2 = MSE(generate_image, target_image)
+

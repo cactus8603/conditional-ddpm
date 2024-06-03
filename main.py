@@ -17,8 +17,8 @@ def create_parser():
 
     ### data path
     # parser.add_argument("--config_path", default="config.yaml", nargs='?', help="path to config file")
-    parser.add_argument("--data_path", default='/code/Font/fonts_50/val_byFont', type=str, help='') # /code/Font/fonts_50/val_byFont # /code/Font/fonts_50/byFont
-    parser.add_argument("--sample_set", default='./sample/test_style', type=str, help='')
+    parser.add_argument("--data_path", default='./dataset`', type=str, help='') 
+    # parser.add_argument("--sample_set", default='./sample/test_style', type=str, help='')
     parser.add_argument("--model_save_path", default='./result', type=str, help='path to save model and tbwriter')
     # parser.add_argument("--json_file", default='./cfgs/font_classes_50.json', type=str, help='')
 
@@ -87,15 +87,15 @@ if __name__ == '__main__':
     scaler = amp.GradScaler()
 
     denoiser = ContextUNet()
-    diffusion = (model=denoiser)
+    diffusion = diffusion(model=denoiser)
 
     pbar = tqdm(trainloader)
     tmp_loss = 999
     for epoch in range(arg.num_epochs):
-
+        # denoiser, optimizer, dataloader, scaler, scheduler, device, arg
         # training 
         loss = train_one_epoch(
-            model = model, 
+            diffusion = diffusion, 
             optimizer = optimizer, 
             dataloader = trainloader,                        
             scaler = scaler,

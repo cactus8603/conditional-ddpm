@@ -28,10 +28,12 @@ class diffusion(nn.Module):
         # add noise
         x_pert = self.perturb_input(x, t, noise, ab_t)
 
-        # pred noise
-        predict_noise = self.model(x_pert, t / self.timesteps, target_img=target_img)
+        # pred noise, condition is ori image
+        predict_noise = self.model(x_pert, t / self.timesteps, condition_img=x)
 
         loss = F.mse_loss(predict_noise, noise)
+        # 
+        # loss = F.mse_loss(x, target_img)
 
         return x_pert, predict_noise, self.get_x_unpert(x_pert, t, predict_noise, ab_t), loss
 

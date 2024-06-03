@@ -39,9 +39,9 @@ def perturb_input(x, t, noise, ab_t):
         """
         return ab_t.sqrt()[t, None, None, None] * x + (1 - ab_t[t, None, None, None]).sqrt() * noise
 
-def train_one_epoch(denoiser, optimizer, dataloader, scaler, scheduler, device, arg):
+def train_one_epoch(diffusion, optimizer, dataloader, scaler, scheduler, device, arg):
     # model.train()
-    diffusion = diffusion(model=denoiser)
+    # diffusion = diffusion(model=denoiser)
     # loss_function = torch.nn.MSELoss()
     
     a_t, b_t, ab_t = get_ddpm_noise_schedule(arg.timesteps, device=device, initial_beta=1e-4, final_beta=0.02)
