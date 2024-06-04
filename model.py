@@ -1,10 +1,14 @@
 import torch 
+import math
 from torch import nn
 
 class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels, is_res=False):
         super(ResidualBlock, self).__init__()
         self.is_res = is_res
+        self.same_channels = in_channels == out_channels
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(out_channels),
@@ -16,11 +20,17 @@ class ResidualBlock(nn.Module):
             nn.GELU()
         )
 
+        self.handle_channel = nn.Conv2d(in_channels, out_channels, 1, 1, 0)
+
     def forward(self, x):
-        x_out = self.conv2(self.conv1(x))
+        x_out = self.conv1(x)
+        x_out = self.conv2(x_out)
 
         if self.is_res:
-            x_out = x_out + x
+            if self.same_channels:  
+                x_out += x
+            else:   
+                x_out = x_out + self.handle_channel(x)
             return x_out
         else:
             return x_out
@@ -30,7 +40,7 @@ class DownwardBlock(nn.Module):
         super(DownwardBlock, self).__init__()
         layers = [
             ResidualBlock(in_channels, out_channels, is_res=True),
-            ResidualBlock(in_channels, out_channels),
+            ResidualBlock(out_channels, out_channels),
             nn.MaxPool2d(kernel_size=2)
         ]
         self.model = nn.Sequential(*layers)
@@ -46,7 +56,7 @@ class UpwardBlock(nn.Module):
 
         layers = [
             nn.ConvTranspose2d(in_channels, out_channels, 2, 2),
-            ResidualBlock(in_channels, out_channels, is_res=True),
+            ResidualBlock(out_channels, out_channels, is_res=True),
             ResidualBlock(out_channels, out_channels)
         ]
         self.model = nn.Sequential(*layers)
@@ -66,7 +76,10 @@ class FCEmbedding(nn.Module):
         self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        x = x.reshape(-1, self.in_dim)
+        # x = x.reshape(-1, self.in_dim)
+        print(x.shape)
+        print(self.in_dim)
+        x = x.reshape(x.size(0), self.in_dim)
         return self.model(x)[:, :, None, None]
     
 class CrossAttention(nn.Module):
@@ -108,7 +121,7 @@ class CrossAttention(nn.Module):
         return attn_output
 
 class ContextUNet(nn.Module):
-    def __init__(self, in_channels=1, height=256, width=256, n_feat=64, n_cfeat=10, n_downs=4):
+    def __init__(self, in_channels=1, height=256, width=256, n_feat=32, n_cfeat=5, n_downs=2):
         super(ContextUNet, self).__init__()
         self.in_channels = in_channels
         self.height = height
@@ -151,28 +164,36 @@ class ContextUNet(nn.Module):
             nn.Conv2d(n_feat, in_channels, 1, 1)
         )
 
-        # Define time & context embedding blocks 
-        self.timeembs = TimeEmbedding(n_feat) # nn.ModuleList([FCEmbedding(1, 2**i * n_feat) for i in range(n_downs, 0, -1)])
-        self.contextembs = nn.ModuleList([FCEmbedding(n_cfeat, 2**i * n_feat) for i in range(n_downs, 0, -1)])
+        ### original version
+        self.timeembs = nn.ModuleList([FCEmbedding(1, 2**i*n_feat) for i in range(n_downs, 0, -1)])
+        self.contextembs = nn.ModuleList([FCEmbedding(n_cfeat, 2**i*n_feat) for i in range(n_downs, 0, -1)])
 
-        # Define cross attention layer
-        self.cross_attention = CrossAttention(d_model=2**n_downs * n_feat, nhead=8)
+        ### add cross attention
+        # Define time & context embedding blocks 
+        # self.timeembs = TimeEmbedding(n_feat) # nn.ModuleList([FCEmbedding(1, 2**i * n_feat) for i in range(n_downs, 0, -1)])
+        # self.contextembs = nn.ModuleList([FCEmbedding(n_cfeat, 2**i * n_feat) for i in range(n_downs, 0, -1)])
+
+        # # Define cross attention layer
+        # self.cross_attention = CrossAttention(d_model=2**n_downs * n_feat, nhead=8)
 
     def forward(self, x, t, condition_image):
         x = self.init_conv(x)
         downs = []
         for i, down_block in enumerate(self.down_blocks):
-            x, skip_connection = down_block(x)
-            downs.append(skip_connection)
+            if i == 0: 
+                downs.append(down_block(x)) # this line
+            else: 
+                downs.append(down_block(downs[-1])) 
         up = self.up0(self.to_vec(downs[-1]))
 
-        # Add cross attention mechanism here
-        target_emb = self.contextembs[0](condition_image).view(condition_image.size(0), -1, 1, 1)  # Reshape context embedding to match feature map size
-        up = self.cross_attention(up, target_emb)
+        # Add cross attention 
+        # this line
+        # target_emb = self.contextembs[0](condition_image).view(condition_image.size(0), -1, 1, 1)  # Reshape context embedding to match feature map size
+        # up = self.cross_attention(up, target_emb)
 
         for i, (up_block, down, contextemb, timeemb) in enumerate(zip(self.up_blocks, downs[::-1], self.contextembs, self.timeembs)):
             if i == 0:
-                up = up_block(up * contextemb(condition_image) + timeemb(t), down)
+                up = up_block(up * contextemb(condition_image) + timeemb(t), down) # fix to this line
             else:
                 up = up_block(up, down)
         return self.final_conv(torch.cat([up, downs[0]], axis=1))

@@ -7,11 +7,12 @@ from torchvision.utils import save_image, make_grid
 from model import ContextUNet
 
 # ConditionalDiffusionModel
-class diffusion(nn.Module):
-    def __init__(self, model):
-        super(diffusion, self).__init__()
+class ConditionalDiffusionModel(nn.Module):
+    def __init__(self, model, device):
+        super(ConditionalDiffusionModel, self).__init__()
         self.timesteps = 1000
         self.model = model
+        self.device = device
 
     def forward(self, x, target_img):
         self.model.train()
@@ -19,7 +20,7 @@ class diffusion(nn.Module):
 
         B, _, _, _ = x.shape
 
-        a_t, b_t, ab_t = self.get_ddpm_noise_schedule(self.timesteps)
+        _, _, ab_t = self.get_ddpm_noise_schedule(self.timesteps)
 
         ### 
         noise = torch.rand_like(x)
@@ -29,7 +30,7 @@ class diffusion(nn.Module):
         x_pert = self.perturb_input(x, t, noise, ab_t)
 
         # pred noise, condition is ori image
-        predict_noise = self.model(x_pert, t / self.timesteps, condition_img=x)
+        predict_noise = self.model(x_pert, t / self.timesteps, condition_image=x)
 
         loss = F.mse_loss(predict_noise, noise)
         # 
@@ -57,7 +58,7 @@ class diffusion(nn.Module):
         ab_t = torch.cumprod(a_t, dim=0)
         return a_t, b_t, ab_t
     
-    def perturb_input(x, t, noise, ab_t):
+    def perturb_input(self, x, t, noise, ab_t):
         """Perturbs given input
         i.e., Algorithm 1, step 5, argument of epsilon_theta in the article
         """

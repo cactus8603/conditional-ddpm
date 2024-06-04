@@ -6,7 +6,7 @@ from torch.nn import functional as F
 from torch.cuda import amp
 from torch.cuda.amp import autocast as autocast
 
-from diffusion import diffusion
+from diffusion import ConditionalDiffusionModel
 
 def prepare_data(input_images, target_images, noise_level):
     noise = torch.randn_like(input_images)

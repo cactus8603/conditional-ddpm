@@ -5,7 +5,7 @@ import json
 from PIL import Image
 from torch.utils.data import Dataset
 # import albumentations as A
-from torchvision.transforms import transforms, Compose, Resize, ToTensor, ToPILImage, Normalize
+from torchvision.transforms import transforms, Resize, ToTensor, ToPILImage, Normalize, Grayscale
 from glob import glob
 import os
 
@@ -23,8 +23,10 @@ class TrainImageDataset(Dataset):
         self.transform = transforms.Compose([
             ToPILImage(),
             Resize((256, 256)), 
+            Grayscale(num_output_channels = 1),
             ToTensor(),
-            Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            Normalize([0.5], [0.1]),
+            # Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ])
 
         # self.transform = A.Compose([
@@ -52,9 +54,11 @@ class TrainImageDataset(Dataset):
 
     def __getitem__(self, index):
         
-        ### use torch transform
-        input_img = cv2.imread(self.input_image_path[index], cv2.IMREAD_GRAYSCALE)
-        target_img = cv2.imread(self.target_image_path[index], cv2.IMREAD_GRAYSCALE)
+        ### use torch transform 
+        input_img = cv2.imread(self.input_image_path[index]) # , cv2.IMREAD_GRAYSCALE
+        target_img = cv2.imread(self.target_image_path[index]) # , cv2.IMREAD_GRAYSCALE
+
+        # print(input_img.shape)
 
         input_tensor = self.transform(input_img)
         target_tensor = self.transform(target_img)
@@ -86,8 +90,10 @@ class ValImageDataset(Dataset):
         self.transform = transforms.Compose([
             ToPILImage(),
             Resize((256, 256)), 
+            Grayscale(num_output_channels = 1),
             ToTensor(),
-            Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            Normalize([0.5], [0.1]),
+            # Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ])
 
         # self.transform = A.Compose([
@@ -100,6 +106,7 @@ class ValImageDataset(Dataset):
         ### use torch transform
         input_img = cv2.imread(self.input_image_path[index], cv2.IMREAD_GRAYSCALE)
         target_img = cv2.imread(self.target_image_path[index], cv2.IMREAD_GRAYSCALE)
+        
 
         input_tensor = self.transform(input_img)
         target_tensor = self.transform(target_img)

@@ -10,7 +10,7 @@ from tensorboardX import SummaryWriter
 
 from utils import train_one_epoch
 from model import ContextUNet
-from diffusion import diffusion
+from diffusion import ConditionalDiffusionModel
 from dataset import TrainImageDataset, ValImageDataset
 
 def create_parser():
@@ -62,7 +62,7 @@ if __name__ == '__main__':
         os.mkdir(arg.save_path)
     tb_writer = SummaryWriter(arg.save_path)
 
-    model = ContextUNet()
+    # model = ContextUNet()
 
     ### DataSet ### fromat: data_path // train/val // input/target
     train_dataset = TrainImageDataset(os.path.join(arg.data_path, 'train/input'), os.path.join(arg.data_path, 'train/target'))
@@ -82,15 +82,16 @@ if __name__ == '__main__':
         num_workers=arg.num_workers,
     )
 
+    ### load model
+    denoiser = ContextUNet().half().to(device)
+    diffusion = ConditionalDiffusionModel(model=denoiser, device=device).half().to(device)
+
     # setting optim
-    optimizer = torch.optim.AdamW(model.parameters(), lr=arg.lr)
+    optimizer = torch.optim.AdamW(denoiser.parameters(), lr=arg.lr)
     scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1, end_factor=0.01, total_iters=50)
     scaler = amp.GradScaler()
 
-    ### load model
-    denoiser = ContextUNet()
-    diffusion = diffusion(model=denoiser)
-
+    
     pbar = tqdm(trainloader)
     tmp_loss = 999
     for epoch in range(arg.epochs):
