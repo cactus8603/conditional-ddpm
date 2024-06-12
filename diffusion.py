@@ -30,7 +30,7 @@ class ConditionalDiffusionModel(nn.Module):
         x_pert = self.perturb_input(x, t, noise, ab_t)
 
         # pred noise, condition is ori image
-        predict_noise = self.model(x_pert, t / self.timesteps, condition_image=x)
+        predict_noise = self.model(x_pert, t / self.timesteps, condition_image=target_img)
 
         loss = F.mse_loss(predict_noise, noise)
         # 

@@ -63,13 +63,14 @@ def train_one_epoch(diffusion, optimizer, dataloader, scaler, scheduler, epoch, 
         
         scaler.scale(loss).backward()
 
-        if (i + 1) % arg.accumulation_steps == 0:
+        if (i + 1) % arg.accumulation_step == 0:
             # upgrade params
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad()
 
-        running_loss += loss.item() * arg.accumulation_steps
+        running_loss += loss.item() * arg.accumulation_step
+        
     
     diffusion.save_tensor_images(input_img, x_pert, x_denoise, epoch, arg.save_path)
     

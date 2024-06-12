@@ -20,7 +20,7 @@ def create_parser():
     # parser.add_argument("--config_path", default="config.yaml", nargs='?', help="path to config file")
     parser.add_argument("--data_path", default='./dataset', type=str, help='') 
     # parser.add_argument("--sample_set", default='./sample/test_style', type=str, help='')
-    parser.add_argument("--save_path", default='./result', type=str, help='path to save model and tbwriter')
+    parser.add_argument("--save_path", default='./result/add_c', type=str, help='path to save model and tbwriter')
     # parser.add_argument("--json_file", default='./cfgs/font_classes_50.json', type=str, help='')
 
     ### training setting
@@ -83,8 +83,8 @@ if __name__ == '__main__':
     )
 
     ### load model
-    denoiser = ContextUNet().half().to(device)
-    diffusion = ConditionalDiffusionModel(model=denoiser, device=device).half().to(device)
+    denoiser = ContextUNet().to(device)
+    diffusion = ConditionalDiffusionModel(model=denoiser, device=device).to(device)
 
     # setting optim
     optimizer = torch.optim.AdamW(denoiser.parameters(), lr=arg.lr)
@@ -116,6 +116,6 @@ if __name__ == '__main__':
         tb_writer.add_scalar('loss', loss, epoch)
         if loss < tmp_loss:
             save_path = os.path.join(arg.save_path, "model_{}_{:.3f}_.pth".format(epoch, loss))
-            torch.save(model, save_path)
+            torch.save(denoiser, save_path)
             tmp_loss = loss
 
