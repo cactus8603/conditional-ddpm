@@ -13,6 +13,7 @@ class ConditionalDiffusionModel(nn.Module):
         self.timesteps = 1000
         self.model = model
         self.device = device
+        self.inference_transform = lambda x: (x + 1)/2
 
     def forward(self, x, target_img):
         self.model.train()
@@ -20,23 +21,37 @@ class ConditionalDiffusionModel(nn.Module):
 
         B, _, _, _ = x.shape
 
-        _, _, ab_t = self.get_ddpm_noise_schedule(self.timesteps)
+        a_t, b_t, ab_t = self.get_ddpm_noise_schedule(self.timesteps)
 
         ### 
         noise = torch.rand_like(x)
-        t = torch.randint(0, 1000, (x.shape[0],), device=x.device)
+        t = torch.randint(1, self.timesteps+1, (x.shape[0],), device=x.device)
+        # t_tmp = int(t)
+        # print(t)
 
         # add noise
         x_pert = self.perturb_input(x, t, noise, ab_t)
 
-        # pred noise, condition is ori image
+        # pred noise
         predict_noise = self.model(x_pert, t / self.timesteps, condition_image=target_img)
+        x_denoised = self.get_x_unpert(x_pert, t, predict_noise, ab_t)
+        loss1 = F.mse_loss(predict_noise, noise)
 
-        loss = F.mse_loss(predict_noise, noise)
-        # 
-        # loss = F.mse_loss(x, target_img)
+        # pred_img_test
+        # for denoise_step in range(self.timesteps-1, 0, -1):
+        #     x_denoised = (self.get_x_unpert(x_pert, denoise_step, predict_noise, ab_t))
 
+        # pred_img_test_2
+        # x_denoised = self.get_x0(x_pert, t, predict_noise, target_img,  ab_t)
+            
+        x_denoised_trans = self.inference_transform(x_denoised)
+        loss2 = F.mse_loss(x_denoised_trans, target_img)
+
+        loss = loss1 + loss2
+        
+        # return x_pert, predict_noise, x_denoised, loss
         return x_pert, predict_noise, self.get_x_unpert(x_pert, t, predict_noise, ab_t), loss
+
 
     def get_ddpm_noise_schedule(self, timesteps, initial_beta=1e-4, final_beta=0.02):
         """Generate DDPM noise schedule.
@@ -73,6 +88,23 @@ class ConditionalDiffusionModel(nn.Module):
         fpath = os.path.join(save_dir, 'orig_noise_denoise_{}.jpg'.format(epoch))
         inference_transform = lambda x: (x + 1)/2
         save_image([make_grid(inference_transform(img.detach())) for img in [x_orig, x_noised, x_denoised]], fpath)
+
+    
+
+    @torch.no_grad()
+    def simple_sample(self, n_samples, target=None, inference_transform=lambda x: (x+1)/2):
+        a_t, b_t, ab_t = self.get_ddpm_noise_schedule(self.timesteps, self.device)
+
+        self.model.eval()
+        samples = torch.randn(n_samples, self.model.in_channels, self.model.height, self.model.width, device=self.device)
+
+        for t in range(self.timesteps, 0, -1):
+            z = torch.randn_like(samples) if t > 1 else 0
+            pred_noise = self.model(samples, torch.tensor([t/self.timesteps], device=self.device)[:, None, None, None], target)
+            samples = self.denoise_add_noise(samples, t, pred_noise, a_t, b_t, ab_t, z)
+
+        return inference_transform(samples.detach().cpu())
+
     
     @torch.no_grad()
     def sample_ddpm(self, n_samples, target=None, timesteps=None, 

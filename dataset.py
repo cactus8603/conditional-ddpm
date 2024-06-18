@@ -25,7 +25,7 @@ class TrainImageDataset(Dataset):
             Resize((128, 128)), 
             Grayscale(num_output_channels = 1),
             ToTensor(),
-            Normalize([0.5], [0.1]),
+            # Normalize([0.5], [0.1]),
             # Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ])
 
@@ -92,7 +92,7 @@ class ValImageDataset(Dataset):
             Resize((128, 128)), 
             Grayscale(num_output_channels = 1),
             ToTensor(),
-            Normalize([0.5], [0.1]),
+            # Normalize([0.5], [0.1]),
             # Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ])
 

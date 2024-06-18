@@ -70,7 +70,7 @@ class convFCEmbedding(nn.Module):
         self.in_dim = in_dim
         
         self.conv = nn.Sequential(
-            nn.Conv2d(1, out_dim, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_dim, out_dim, kernel_size=3, stride=1, padding=1),
             # nn.BatchNorm2d(32),
             nn.GELU(),
             # nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
@@ -207,7 +207,8 @@ class ContextUNet(nn.Module):
 
         ### original version
         self.timeembs = nn.ModuleList([FCEmbedding(1, 2**i*n_feat) for i in range(n_downs, 0, -1)])
-        self.contextembs = nn.ModuleList([convFCEmbedding(2**(i-1)*n_feat, 2**i*n_feat) for i in range(n_downs, 0, -1)])
+        self.contextembs = nn.ModuleList([convFCEmbedding(1 if(i==0) else n_feat*2**i, 2**(i+1)*n_feat) for i in range(n_downs)])
+        # (16, 32), (32, 64), (64, 128), (128, 256)
         # self.contextembs = nn.ModuleList([convFCEmbedding(i, 2**i*n_feat) for i in range(n_downs, 0, -1)])
         # 32, 4*32=128
         # 32, 2*32=64
@@ -238,19 +239,26 @@ class ContextUNet(nn.Module):
         # up = self.cross_attention(up, target_emb)
 
         condition_feature = []
+        # print(self.contextembs)
         for i, layer in enumerate(self.contextembs):
             condition_image = layer(condition_image)
             condition_feature.append(condition_image)
-            print(condition_image.shape)
-        return 
+            # print(condition_image.shape)
+            # (32, 64, 64)
+            # (64, 32, 32)
+            # (128, 16, 16)
+            # (256, 8, 8)
+        # return 
         
         for i, (up_block, down, contextemb, timeemb) in enumerate(zip(self.up_blocks, downs[::-1], self.contextembs, self.timeembs)):
             # print("\nup:", up.shape) # 32, 128, 16, 16
             # print("time:", timeemb(t).shape) # 32, 128, 1, 1
-            # print("emb:", contextemb(condition_image).shape)
+            # print("emb:", condition_feature[len(condition_feature)-i-1].shape)
+            # # print("emb:", contextemb(condition_image).shape)
             # print('---------------')
-            up = up_block(up * contextemb(condition_image) + timeemb(t), down) # fix to this line
-            up = up_block(up + timeemb(t), down)
+            # up = up_block(up * contextemb(condition_image) + timeemb(t), down) # fix to this line
+            up = up_block(up * condition_feature[len(condition_feature)-i-1] + timeemb(t), down) # fix to this line
+            # up = up_block(up + timeemb(t), down)
         # print("final, up:", up.shape)
         # print("final, down:", downs[0].shape)
         return self.final_conv(torch.cat([up, x], axis=1))

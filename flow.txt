@@ -13,3 +13,10 @@ loss2 = MSE(generate_image, target_image)
 1. concat at first
 2. cross attention at middle
 3. input at Upsample
+
+### input at Upsample ###
+Test:
+1. add condition
+2. use pred_noise loss, pred_img_loss
+
+

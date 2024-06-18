@@ -20,12 +20,12 @@ def create_parser():
     # parser.add_argument("--config_path", default="config.yaml", nargs='?', help="path to config file")
     parser.add_argument("--data_path", default='./dataset', type=str, help='') 
     # parser.add_argument("--sample_set", default='./sample/test_style', type=str, help='')
-    parser.add_argument("--save_path", default='./result/add_c', type=str, help='path to save model and tbwriter')
+    parser.add_argument("--save_path", default='./result/add_c_loss_img_noise', type=str, help='path to save model and tbwriter')
     # parser.add_argument("--json_file", default='./cfgs/font_classes_50.json', type=str, help='')
 
     ### training setting
-    parser.add_argument("--lr", default=1e-2, type=float, help='learning rate')
-    parser.add_argument("--epochs", default=200, type=int, help='total epoch')
+    parser.add_argument("--lr", default=1e-3, type=float, help='learning rate')
+    parser.add_argument("--epochs", default=100, type=int, help='total epoch')
     parser.add_argument("--batch_size", default=32, type=int, help='total classes')
     
     parser.add_argument("--num_workers", default=6, type=int, help='')
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     scaler = amp.GradScaler()
 
     
-    pbar = tqdm(trainloader)
+    pbar = tqdm(arg.epochs)
     tmp_loss = 999
     for epoch in range(arg.epochs):
         # denoiser, optimizer, dataloader, scaler, scheduler, device, arg
@@ -115,7 +115,8 @@ if __name__ == '__main__':
 
         tb_writer.add_scalar('loss', loss, epoch)
         if loss < tmp_loss:
-            save_path = os.path.join(arg.save_path, "model_{}_{:.3f}_.pth".format(epoch, loss))
-            torch.save(denoiser, save_path)
             tmp_loss = loss
-
+            if epoch > 10:
+                save_path = os.path.join(arg.save_path, "model_{}_{:.3f}_.pth".format(epoch, loss))
+                torch.save(denoiser, save_path)
+            
