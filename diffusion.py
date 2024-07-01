@@ -15,7 +15,7 @@ class ConditionalDiffusionModel(nn.Module):
         self.device = device
         self.inference_transform = lambda x: (x + 1)/2
 
-    def forward(self, x, target_img):
+    def forward(self, x, condition_image):
         self.model.train()
         ### 實作將圖片加噪，並contextUNet去噪
 
@@ -33,21 +33,21 @@ class ConditionalDiffusionModel(nn.Module):
         x_pert = self.perturb_input(x, t, noise, ab_t)
 
         # pred noise
-        predict_noise = self.model(x_pert, t / self.timesteps, condition_image=target_img)
+        predict_noise = self.model(x_pert, t / self.timesteps, condition_image=condition_image)
         x_denoised = self.get_x_unpert(x_pert, t, predict_noise, ab_t)
         loss1 = F.mse_loss(predict_noise, noise)
 
         # pred_img_test
         # for denoise_step in range(self.timesteps-1, 0, -1):
-        #     x_denoised = (self.get_x_unpert(x_pert, denoise_step, predict_noise, ab_t))
+            # x_denoised = (self.get_x_unpert(x_pert, denoise_step, predict_noise, ab_t))
 
         # pred_img_test_2
         # x_denoised = self.get_x0(x_pert, t, predict_noise, target_img,  ab_t)
             
-        x_denoised_trans = self.inference_transform(x_denoised)
-        loss2 = F.mse_loss(x_denoised_trans, target_img)
+        # x_denoised_trans = self.inference_transform(x_denoised)
+        # loss2 = F.mse_loss(x_denoised_trans, target_img)
 
-        loss = loss1 + loss2
+        loss = loss1
         
         # return x_pert, predict_noise, x_denoised, loss
         return x_pert, predict_noise, self.get_x_unpert(x_pert, t, predict_noise, ab_t), loss
@@ -92,29 +92,40 @@ class ConditionalDiffusionModel(nn.Module):
     
 
     @torch.no_grad()
-    def simple_sample(self, n_samples, target=None, inference_transform=lambda x: (x+1)/2):
-        a_t, b_t, ab_t = self.get_ddpm_noise_schedule(self.timesteps, self.device)
+    def simple_sample(self, n_samples, epoch, save_dir, condition=None, inference_transform=lambda x: (x+1)/2, ):
+        self.model.eval()
+
+        a_t, b_t, ab_t = self.get_ddpm_noise_schedule(self.timesteps)
 
         self.model.eval()
         samples = torch.randn(n_samples, self.model.in_channels, self.model.height, self.model.width, device=self.device)
 
         for t in range(self.timesteps, 0, -1):
             z = torch.randn_like(samples) if t > 1 else 0
-            pred_noise = self.model(samples, torch.tensor([t/self.timesteps], device=self.device)[:, None, None, None], target)
+            pred_noise = self.model(samples, torch.tensor([t/self.timesteps], device=self.device), condition)
             samples = self.denoise_add_noise(samples, t, pred_noise, a_t, b_t, ab_t, z)
+        
+        samples = inference_transform(samples.detach().cpu())
+        samples = torch.clamp(samples, 0, 1)
 
-        return inference_transform(samples.detach().cpu())
+        for i in range(n_samples):
+            fpath = os.path.join(save_dir, 'sample_{}_{}.jpg'.format(epoch, i))
+            save_image(samples[i], fpath)
+        # fpath = os.path.join(save_dir, 'sample_{}.jpg'.format(epoch))
+        # save_image((inference_transform(samples.detach().cpu())), fpath)
+
+        # return inference_transform(samples.detach().cpu())
 
     
     @torch.no_grad()
-    def sample_ddpm(self, n_samples, target=None, timesteps=None, 
+    def sample_ddpm(self, n_samples, condition=None, timesteps=None, 
                     beta1=None, beta2=None, save_rate=20, inference_transform=lambda x: (x+1)/2):
         """Returns the final denoised sample x0,
         intermediate samples xT, xT-1, ..., x1, and
         times tT, tT-1, ..., t1
         """
 
-        a_t, b_t, ab_t = self.get_ddpm_noise_schedule(timesteps, beta1, beta2, self.device)
+        a_t, b_t, ab_t = self.get_ddpm_noise_schedule(self.timesteps)
 
         
         self.model.eval()
@@ -122,13 +133,13 @@ class ConditionalDiffusionModel(nn.Module):
                               self.model.height, self.model.width, 
                               device=self.device)
         intermediate_samples = [samples.detach().cpu()] # samples at T = timesteps
-        t_steps = [timesteps] # keep record of time to use in animation generation
-        for t in range(timesteps, 0, -1):
-            print(f"Sampling timestep {t}", end="\r")
-            if t % 50 == 0: print(f"Sampling timestep {t}")
+        t_steps = [self.timesteps] # keep record of time to use in animation generation
+        for t in range(self.timesteps, 0, -1):
+            # print(f"Sampling timestep {t}", end="\r")
+            # if t % 50 == 0: print(f"Sampling timestep {t}")
 
             z = torch.randn_like(samples) if t > 1 else 0
-            pred_noise = self.model(samples, torch.tensor([t/timesteps], device=self.device)[:, None, None, None], target)
+            pred_noise = self.model(samples, torch.tensor([t/self.timesteps], device=self.device)[:, None, None, None], condition)
             samples = self.denoise_add_noise(samples, t, pred_noise, a_t, b_t, ab_t, z)
             
             if t % save_rate == 1 or t < 8:
@@ -144,11 +155,13 @@ class ConditionalDiffusionModel(nn.Module):
         denoised_x = (x - pred_noise * ((1 - a_t[t]) / (1 - ab_t[t]).sqrt())) / a_t[t].sqrt()
         return denoised_x + noise
     
-    def save_generated_samples_into_folder(self, n_samples, target, folder_path, epoch):
+    def save_generated_samples_into_folder(self, n_samples, condition, folder_path, epoch):
         """Save DDPM generated inputs into a specified directory"""
-        samples, _, _ = self.sample_ddpm(n_samples, target)
+        samples, _, _ = self.sample_ddpm(n_samples, condition)
         for i, sample in enumerate(samples):
-            save_image(sample, os.path.join(folder_path, f"image_{epoch}_{i}.jpeg"))
+            if not os.path.exists(os.path.join(folder_path, str(epoch))):
+                os.makedirs(os.path.join(folder_path, str(epoch)))
+            save_image(sample, os.path.join(folder_path, str(epoch), f"image_{epoch}_{i}.jpeg"))
 
  
 

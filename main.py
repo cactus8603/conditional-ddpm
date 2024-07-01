@@ -20,12 +20,12 @@ def create_parser():
     # parser.add_argument("--config_path", default="config.yaml", nargs='?', help="path to config file")
     parser.add_argument("--data_path", default='./dataset', type=str, help='') 
     # parser.add_argument("--sample_set", default='./sample/test_style', type=str, help='')
-    parser.add_argument("--save_path", default='./result/add_c_loss_img_noise', type=str, help='path to save model and tbwriter')
-    # parser.add_argument("--json_file", default='./cfgs/font_classes_50.json', type=str, help='')
+    parser.add_argument("--save_path", default='./result/test', type=str, help='path to save model and tbwriter')
+    # parser.add_argument("--load_model_path", default='/code/conditional-ddpm/result/add_c_loss_noise/model_98_0.006_.pth', type=str, help='')
 
     ### training setting
-    parser.add_argument("--lr", default=1e-3, type=float, help='learning rate')
-    parser.add_argument("--epochs", default=100, type=int, help='total epoch')
+    parser.add_argument("--lr", default=1e-2, type=float, help='learning rate')
+    parser.add_argument("--epochs", default=200, type=int, help='total epoch')
     parser.add_argument("--batch_size", default=32, type=int, help='total classes')
     
     parser.add_argument("--num_workers", default=6, type=int, help='')
@@ -65,8 +65,8 @@ if __name__ == '__main__':
     # model = ContextUNet()
 
     ### DataSet ### fromat: data_path // train/val // input/target
-    train_dataset = TrainImageDataset(os.path.join(arg.data_path, 'train/input'), os.path.join(arg.data_path, 'train/target'))
-    val_dataset = ValImageDataset(os.path.join(arg.data_path, 'val/input'), os.path.join(arg.data_path, 'val/target'))
+    train_dataset = TrainImageDataset(os.path.join(arg.data_path, 'train/target'), os.path.join(arg.data_path, 'train/input'))
+    # val_dataset = ValImageDataset(os.path.join(arg.data_path, 'val/input'), os.path.join(arg.data_path, 'val/target'))
 
     ### DataLoader ###
     trainloader = DataLoader(
@@ -84,6 +84,7 @@ if __name__ == '__main__':
 
     ### load model
     denoiser = ContextUNet().to(device)
+    # denoiser = torch.load(arg.load_model_path)
     diffusion = ConditionalDiffusionModel(model=denoiser, device=device).to(device)
 
     # setting optim

@@ -257,8 +257,8 @@ class ContextUNet(nn.Module):
             # # print("emb:", contextemb(condition_image).shape)
             # print('---------------')
             # up = up_block(up * contextemb(condition_image) + timeemb(t), down) # fix to this line
-            up = up_block(up * condition_feature[len(condition_feature)-i-1] + timeemb(t), down) # fix to this line
-            # up = up_block(up + timeemb(t), down)
+            # up = up_block(up * condition_feature[len(condition_feature)-i-1] + timeemb(t), down) # fix to this line
+            up = up_block(up + timeemb(t), down)
         # print("final, up:", up.shape)
         # print("final, down:", downs[0].shape)
         return self.final_conv(torch.cat([up, x], axis=1))
