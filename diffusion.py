@@ -17,8 +17,11 @@ class ConditionalDiffusionModel(nn.Module):
         self.model = model
         self.device = device
         self.inference_transform = lambda x: (x + 1)/2
+<<<<<<< HEAD
         self.beta1 = 1e-4
         self.beta2 = 0.02
+=======
+>>>>>>> 4b972075974ad16762fae68982ee60f1d1ab156b
 
     def forward(self, x, condition_image):
         self.model.train()
@@ -26,7 +29,11 @@ class ConditionalDiffusionModel(nn.Module):
 
         B, _, _, _ = x.shape
 
+<<<<<<< HEAD
         a_t, b_t, ab_t = self.get_ddpm_noise_schedule(self.timesteps, self.beta1, self.beta2)
+=======
+        a_t, b_t, ab_t = self.get_ddpm_noise_schedule(self.timesteps)
+>>>>>>> 4b972075974ad16762fae68982ee60f1d1ab156b
 
         ### 
         noise = torch.rand_like(x)
@@ -58,7 +65,11 @@ class ConditionalDiffusionModel(nn.Module):
         return x_pert, predict_noise, self.get_x_unpert(x_pert, t, predict_noise, ab_t), loss
 
 
+<<<<<<< HEAD
     def get_ddpm_noise_schedule(self, timesteps, beta1, beta2):
+=======
+    def get_ddpm_noise_schedule(self, timesteps, initial_beta=1e-4, final_beta=0.02):
+>>>>>>> 4b972075974ad16762fae68982ee60f1d1ab156b
         """Generate DDPM noise schedule.
 
         Args:
@@ -100,16 +111,52 @@ class ConditionalDiffusionModel(nn.Module):
 
     
 
+<<<<<<< HEAD
     
     @torch.no_grad()
     def sample_ddpm(self, n_samples, condition=None, timesteps=None, 
                     beta1=None, beta2=None, save_rate=100, inference_transform=lambda x: (x+1)/2):
+=======
+    @torch.no_grad()
+    def simple_sample(self, n_samples, epoch, save_dir, condition=None, inference_transform=lambda x: (x+1)/2, ):
+        self.model.eval()
+
+        a_t, b_t, ab_t = self.get_ddpm_noise_schedule(self.timesteps)
+
+        self.model.eval()
+        samples = torch.randn(n_samples, self.model.in_channels, self.model.height, self.model.width, device=self.device)
+
+        for t in range(self.timesteps, 0, -1):
+            z = torch.randn_like(samples) if t > 1 else 0
+            pred_noise = self.model(samples, torch.tensor([t/self.timesteps], device=self.device), condition)
+            samples = self.denoise_add_noise(samples, t, pred_noise, a_t, b_t, ab_t, z)
+        
+        samples = inference_transform(samples.detach().cpu())
+        samples = torch.clamp(samples, 0, 1)
+
+        for i in range(n_samples):
+            fpath = os.path.join(save_dir, 'sample_{}_{}.jpg'.format(epoch, i))
+            save_image(samples[i], fpath)
+        # fpath = os.path.join(save_dir, 'sample_{}.jpg'.format(epoch))
+        # save_image((inference_transform(samples.detach().cpu())), fpath)
+
+        # return inference_transform(samples.detach().cpu())
+
+    
+    @torch.no_grad()
+    def sample_ddpm(self, n_samples, condition=None, timesteps=None, 
+                    beta1=None, beta2=None, save_rate=20, inference_transform=lambda x: (x+1)/2):
+>>>>>>> 4b972075974ad16762fae68982ee60f1d1ab156b
         """Returns the final denoised sample x0,
         intermediate samples xT, xT-1, ..., x1, and
         times tT, tT-1, ..., t1
         """
 
+<<<<<<< HEAD
         a_t, b_t, ab_t = self.get_ddpm_noise_schedule(self.timesteps, self.beta1, self.beta2)
+=======
+        a_t, b_t, ab_t = self.get_ddpm_noise_schedule(self.timesteps)
+>>>>>>> 4b972075974ad16762fae68982ee60f1d1ab156b
 
         
         self.model.eval()
@@ -124,7 +171,11 @@ class ConditionalDiffusionModel(nn.Module):
 
             z = torch.randn_like(samples) if t > 1 else 0
             pred_noise = self.model(samples, torch.tensor([t/self.timesteps], device=self.device)[:, None, None, None], condition)
+<<<<<<< HEAD
             samples = self.denoise_at_t(samples, t, pred_noise, a_t, b_t, ab_t, z)
+=======
+            samples = self.denoise_add_noise(samples, t, pred_noise, a_t, b_t, ab_t, z)
+>>>>>>> 4b972075974ad16762fae68982ee60f1d1ab156b
             
             if t % save_rate == 1 or t < 8:
                 intermediate_samples.append(inference_transform(samples.detach().cpu()))
@@ -143,6 +194,7 @@ class ConditionalDiffusionModel(nn.Module):
     
     def save_generated_samples_into_folder(self, n_samples, condition, folder_path, epoch):
         """Save DDPM generated inputs into a specified directory"""
+<<<<<<< HEAD
         x0, intermediate_samples, t_steps = self.sample_ddpm(n_samples, condition)
 
         if not os.path.exists(os.path.join(folder_path, 'sample')):
@@ -172,6 +224,13 @@ class ConditionalDiffusionModel(nn.Module):
         
     #     ani = FuncAnimation(fig, update, frames=len(intermediate_samples), interval=200)
     #     ani.save(fname)
+=======
+        samples, _, _ = self.sample_ddpm(n_samples, condition)
+        for i, sample in enumerate(samples):
+            if not os.path.exists(os.path.join(folder_path, str(epoch))):
+                os.makedirs(os.path.join(folder_path, str(epoch)))
+            save_image(sample, os.path.join(folder_path, str(epoch), f"image_{epoch}_{i}.jpeg"))
+>>>>>>> 4b972075974ad16762fae68982ee60f1d1ab156b
 
  
 

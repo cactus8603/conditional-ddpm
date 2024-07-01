@@ -20,8 +20,13 @@ def create_parser():
     # parser.add_argument("--config_path", default="config.yaml", nargs='?', help="path to config file")
     parser.add_argument("--data_path", default='./dataset', type=str, help='') 
     # parser.add_argument("--sample_set", default='./sample/test_style', type=str, help='')
+<<<<<<< HEAD
     parser.add_argument("--save_path", default='./result/n_down_4', type=str, help='path to save model and tbwriter')
     parser.add_argument("--load_model_path", default='/code/conditional-ddpm/result/test/model_82_0.012_.pth', type=str, help='')
+=======
+    parser.add_argument("--save_path", default='./result/test', type=str, help='path to save model and tbwriter')
+    # parser.add_argument("--load_model_path", default='/code/conditional-ddpm/result/add_c_loss_noise/model_98_0.006_.pth', type=str, help='')
+>>>>>>> 4b972075974ad16762fae68982ee60f1d1ab156b
 
     ### training setting
     parser.add_argument("--lr", default=1e-2, type=float, help='learning rate')
@@ -66,7 +71,11 @@ if __name__ == '__main__':
 
     ### DataSet ### fromat: data_path // train/val // input/target
     train_dataset = TrainImageDataset(os.path.join(arg.data_path, 'train/target'), os.path.join(arg.data_path, 'train/input'))
+<<<<<<< HEAD
     # val_dataset = ValImageDataset(os.path.join(arg.data_path, 'val/target'), os.path.join(arg.data_path, 'val/input'))
+=======
+    # val_dataset = ValImageDataset(os.path.join(arg.data_path, 'val/input'), os.path.join(arg.data_path, 'val/target'))
+>>>>>>> 4b972075974ad16762fae68982ee60f1d1ab156b
 
     ### DataLoader ###
     trainloader = DataLoader(
@@ -84,7 +93,11 @@ if __name__ == '__main__':
 
     ### load model
     denoiser = ContextUNet().to(device)
+<<<<<<< HEAD
     denoiser = torch.load(arg.load_model_path)
+=======
+    # denoiser = torch.load(arg.load_model_path)
+>>>>>>> 4b972075974ad16762fae68982ee60f1d1ab156b
     diffusion = ConditionalDiffusionModel(model=denoiser, device=device).to(device)
 
     # setting optim
@@ -93,9 +106,15 @@ if __name__ == '__main__':
     scaler = amp.GradScaler()
 
     
+<<<<<<< HEAD
     pbar = trange(arg.epochs)
     tmp_loss = 99
     for epoch in pbar:
+=======
+    pbar = tqdm(arg.epochs)
+    tmp_loss = 999
+    for epoch in range(arg.epochs):
+>>>>>>> 4b972075974ad16762fae68982ee60f1d1ab156b
         # denoiser, optimizer, dataloader, scaler, scheduler, device, arg
 
         # training 
