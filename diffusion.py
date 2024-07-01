@@ -1,7 +1,10 @@
 import os
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 from torchvision.utils import save_image, make_grid
 
 from model import ContextUNet
@@ -13,32 +16,49 @@ class ConditionalDiffusionModel(nn.Module):
         self.timesteps = 1000
         self.model = model
         self.device = device
+        self.inference_transform = lambda x: (x + 1)/2
+        self.beta1 = 1e-4
+        self.beta2 = 0.02
 
-    def forward(self, x, target_img):
+    def forward(self, x, condition_image):
         self.model.train()
         ### 實作將圖片加噪，並contextUNet去噪
 
         B, _, _, _ = x.shape
 
-        _, _, ab_t = self.get_ddpm_noise_schedule(self.timesteps)
+        a_t, b_t, ab_t = self.get_ddpm_noise_schedule(self.timesteps, self.beta1, self.beta2)
 
         ### 
         noise = torch.rand_like(x)
-        t = torch.randint(0, 1000, (x.shape[0],), device=x.device)
+        t = torch.randint(1, self.timesteps+1, (x.shape[0],), device=x.device)
+        # t_tmp = int(t)
+        # print(t)
 
         # add noise
         x_pert = self.perturb_input(x, t, noise, ab_t)
 
-        # pred noise, condition is ori image
-        predict_noise = self.model(x_pert, t / self.timesteps, condition_image=x)
+        # pred noise
+        predict_noise = self.model(x_pert, t / self.timesteps, condition_image=condition_image)
+        x_denoised = self.get_x_unpert(x_pert, t, predict_noise, ab_t)
+        loss1 = F.mse_loss(predict_noise, noise)
 
-        loss = F.mse_loss(predict_noise, noise)
-        # 
-        # loss = F.mse_loss(x, target_img)
+        # pred_img_test
+        # for denoise_step in range(self.timesteps-1, 0, -1):
+            # x_denoised = (self.get_x_unpert(x_pert, denoise_step, predict_noise, ab_t))
 
+        # pred_img_test_2
+        # x_denoised = self.get_x0(x_pert, t, predict_noise, target_img,  ab_t)
+            
+        # x_denoised_trans = self.inference_transform(x_denoised)
+        # loss2 = F.mse_loss(x_denoised_trans, target_img)
+
+        loss = loss1
+        
+        # return x_pert, predict_noise, x_denoised, loss
         return x_pert, predict_noise, self.get_x_unpert(x_pert, t, predict_noise, ab_t), loss
 
-    def get_ddpm_noise_schedule(self, timesteps, initial_beta=1e-4, final_beta=0.02):
+
+    def get_ddpm_noise_schedule(self, timesteps, beta1, beta2):
         """Generate DDPM noise schedule.
 
         Args:
@@ -53,7 +73,7 @@ class ConditionalDiffusionModel(nn.Module):
                 - b_t (torch.Tensor): Beta values.
                 - ab_t (torch.Tensor): Cumulative alpha values.
         """
-        b_t = torch.linspace(initial_beta, final_beta, timesteps + 1, device=self.device)
+        b_t = torch.linspace(beta1, beta2, timesteps + 1, device=self.device)
         a_t = 1 - b_t
         ab_t = torch.cumprod(a_t, dim=0)
         return a_t, b_t, ab_t
@@ -70,19 +90,26 @@ class ConditionalDiffusionModel(nn.Module):
     
     def save_tensor_images(self, x_orig, x_noised, x_denoised, epoch, save_dir):
         """Saves given tensors as a single image"""
-        fpath = os.path.join(save_dir, 'orig_noise_denoise_{}.jpg'.format(epoch))
+
+        if not os.path.exists(os.path.join(save_dir, 'train')):
+            os.makedirs(os.path.join(save_dir, 'train'))
+
+        fpath = os.path.join(save_dir, 'train', 'orig_noise_denoise_{}.jpg'.format(epoch))
         inference_transform = lambda x: (x + 1)/2
         save_image([make_grid(inference_transform(img.detach())) for img in [x_orig, x_noised, x_denoised]], fpath)
+
+    
+
     
     @torch.no_grad()
-    def sample_ddpm(self, n_samples, target=None, timesteps=None, 
-                    beta1=None, beta2=None, save_rate=20, inference_transform=lambda x: (x+1)/2):
+    def sample_ddpm(self, n_samples, condition=None, timesteps=None, 
+                    beta1=None, beta2=None, save_rate=100, inference_transform=lambda x: (x+1)/2):
         """Returns the final denoised sample x0,
         intermediate samples xT, xT-1, ..., x1, and
         times tT, tT-1, ..., t1
         """
 
-        a_t, b_t, ab_t = self.get_ddpm_noise_schedule(timesteps, beta1, beta2, self.device)
+        a_t, b_t, ab_t = self.get_ddpm_noise_schedule(self.timesteps, self.beta1, self.beta2)
 
         
         self.model.eval()
@@ -90,21 +117,23 @@ class ConditionalDiffusionModel(nn.Module):
                               self.model.height, self.model.width, 
                               device=self.device)
         intermediate_samples = [samples.detach().cpu()] # samples at T = timesteps
-        t_steps = [timesteps] # keep record of time to use in animation generation
-        for t in range(timesteps, 0, -1):
-            print(f"Sampling timestep {t}", end="\r")
-            if t % 50 == 0: print(f"Sampling timestep {t}")
+        t_steps = [self.timesteps] # keep record of time to use in animation generation
+        for t in range(self.timesteps, 0, -1):
+            # print(f"Sampling timestep {t}", end="\r")
+            # if t % 50 == 0: print(f"Sampling timestep {t}")
 
             z = torch.randn_like(samples) if t > 1 else 0
-            pred_noise = self.model(samples, torch.tensor([t/timesteps], device=self.device)[:, None, None, None], target)
-            samples = self.denoise_add_noise(samples, t, pred_noise, a_t, b_t, ab_t, z)
+            pred_noise = self.model(samples, torch.tensor([t/self.timesteps], device=self.device)[:, None, None, None], condition)
+            samples = self.denoise_at_t(samples, t, pred_noise, a_t, b_t, ab_t, z)
             
             if t % save_rate == 1 or t < 8:
                 intermediate_samples.append(inference_transform(samples.detach().cpu()))
+                # print(np.asarray(intermediate_samples).shape)
+                # save_image(inference_transform(samples.detach().cpu()), f"{t}_img.jpeg", nrow=8)
                 t_steps.append(t-1)
         return intermediate_samples[-1], intermediate_samples, t_steps
 
-    def denoise_add_noise(self, x, t, pred_noise, a_t, b_t, ab_t, z):
+    def denoise_at_t(self, x, t, pred_noise, a_t, b_t, ab_t, z):
         """Removes predicted noise from x and adds gaussian noise z
         i.e., Algorithm 2, step 4 at the ddpm article
         """
@@ -112,11 +141,37 @@ class ConditionalDiffusionModel(nn.Module):
         denoised_x = (x - pred_noise * ((1 - a_t[t]) / (1 - ab_t[t]).sqrt())) / a_t[t].sqrt()
         return denoised_x + noise
     
-    def save_generated_samples_into_folder(self, n_samples, target, folder_path, epoch):
+    def save_generated_samples_into_folder(self, n_samples, condition, folder_path, epoch):
         """Save DDPM generated inputs into a specified directory"""
-        samples, _, _ = self.sample_ddpm(n_samples, target)
-        for i, sample in enumerate(samples):
-            save_image(sample, os.path.join(folder_path, f"image_{epoch}_{i}.jpeg"))
+        x0, intermediate_samples, t_steps = self.sample_ddpm(n_samples, condition)
+
+        if not os.path.exists(os.path.join(folder_path, 'sample')):
+            os.makedirs(os.path.join(folder_path, 'sample'))
+        save_image(x0, os.path.join(folder_path, 'sample', f"{epoch}_img.jpeg"), nrow=8)
+
+        # self.generate_animation(intermediate_samples, t_steps, os.path.join(folder_path, f"{epoch}_ani.gif"))
+
+        # for i, sample in enumerate(intermediate_samples):
+        #     if not os.path.exists(os.path.join(folder_path, str(epoch))):
+        #         os.makedirs(os.path.join(folder_path, str(epoch)))
+        #     save_image(sample, os.path.join(folder_path, str(epoch), f"image_{epoch}_{i}.jpeg"))
+
+    # def generate_animation(intermediate_samples, t_steps, fname, n_images_per_row=8):
+    #     """Generates animation and saves as a gif file for given intermediate samples"""
+    #     intermediate_samples = [make_grid(x, scale_each=True, normalize=True, 
+    #                                     nrow=n_images_per_row).permute(1, 2, 0).numpy() for x in intermediate_samples]
+    #     fig, ax = plt.subplots(figsize=(5, 5))
+    #     ax.axis("off")
+    #     img_plot = ax.imshow(intermediate_samples[0])
+        
+    #     def update(frame):
+    #         img_plot.set_array(intermediate_samples[frame])
+    #         ax.set_title(f"T = {t_steps[frame]}")
+    #         fig.tight_layout()
+    #         return img_plot
+        
+    #     ani = FuncAnimation(fig, update, frames=len(intermediate_samples), interval=200)
+    #     ani.save(fname)
 
  
 

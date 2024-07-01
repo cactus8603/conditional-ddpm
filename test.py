@@ -1,7 +1,8 @@
 from glob import glob
 import os 
-path = './'
+import torch
+b_t = torch.linspace(1e-4, 0.02, 1001)
+a_t = 1 - b_t
+ab_t = torch.cumprod(a_t, dim=0)
 
-dir = glob(os.path.join(path, '*'))
-
-print(sorted(dir))
+print(ab_t)

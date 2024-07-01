@@ -5,7 +5,7 @@ import argparse
 import os
 from torch.utils.data import DataLoader
 from torch.cuda import amp
-from tqdm import tqdm
+from tqdm import tqdm, trange
 from tensorboardX import SummaryWriter
 
 from utils import train_one_epoch
@@ -20,8 +20,8 @@ def create_parser():
     # parser.add_argument("--config_path", default="config.yaml", nargs='?', help="path to config file")
     parser.add_argument("--data_path", default='./dataset', type=str, help='') 
     # parser.add_argument("--sample_set", default='./sample/test_style', type=str, help='')
-    parser.add_argument("--save_path", default='./result', type=str, help='path to save model and tbwriter')
-    # parser.add_argument("--json_file", default='./cfgs/font_classes_50.json', type=str, help='')
+    parser.add_argument("--save_path", default='./result/n_down_4', type=str, help='path to save model and tbwriter')
+    parser.add_argument("--load_model_path", default='/code/conditional-ddpm/result/test/model_82_0.012_.pth', type=str, help='')
 
     ### training setting
     parser.add_argument("--lr", default=1e-2, type=float, help='learning rate')
@@ -65,8 +65,8 @@ if __name__ == '__main__':
     # model = ContextUNet()
 
     ### DataSet ### fromat: data_path // train/val // input/target
-    train_dataset = TrainImageDataset(os.path.join(arg.data_path, 'train/input'), os.path.join(arg.data_path, 'train/target'))
-    val_dataset = ValImageDataset(os.path.join(arg.data_path, 'val/input'), os.path.join(arg.data_path, 'val/target'))
+    train_dataset = TrainImageDataset(os.path.join(arg.data_path, 'train/target'), os.path.join(arg.data_path, 'train/input'))
+    # val_dataset = ValImageDataset(os.path.join(arg.data_path, 'val/target'), os.path.join(arg.data_path, 'val/input'))
 
     ### DataLoader ###
     trainloader = DataLoader(
@@ -83,8 +83,9 @@ if __name__ == '__main__':
     )
 
     ### load model
-    denoiser = ContextUNet().half().to(device)
-    diffusion = ConditionalDiffusionModel(model=denoiser, device=device).half().to(device)
+    denoiser = ContextUNet().to(device)
+    denoiser = torch.load(arg.load_model_path)
+    diffusion = ConditionalDiffusionModel(model=denoiser, device=device).to(device)
 
     # setting optim
     optimizer = torch.optim.AdamW(denoiser.parameters(), lr=arg.lr)
@@ -92,10 +93,11 @@ if __name__ == '__main__':
     scaler = amp.GradScaler()
 
     
-    pbar = tqdm(trainloader)
-    tmp_loss = 999
-    for epoch in range(arg.epochs):
+    pbar = trange(arg.epochs)
+    tmp_loss = 99
+    for epoch in pbar:
         # denoiser, optimizer, dataloader, scaler, scheduler, device, arg
+
         # training 
         loss = train_one_epoch(
             diffusion = diffusion, 
@@ -109,13 +111,21 @@ if __name__ == '__main__':
         )
 
         ### ToDo: evaluation
+        # for i, (target_img, condition_img) in enumerate(valloader):
+        #     target_img, condition_img = target_img.to(device), condition_img.to(device)
+        #     diffusion.save_generated_samples_into_folder(n_samples=arg.batch_size, condition=condition_img, folder_path=arg.save_path, epoch=i)
 
-        pbar.desc = "epoch:{}, loss:{:.4f}".format(epoch, loss)
+        #     if i==1: break
+
         pbar.update(1)
+        # break
+        pbar.desc = "epoch:{}, loss:{:.4f}".format(epoch, loss)
+        
 
         tb_writer.add_scalar('loss', loss, epoch)
         if loss < tmp_loss:
-            save_path = os.path.join(arg.save_path, "model_{}_{:.3f}_.pth".format(epoch, loss))
-            torch.save(model, save_path)
             tmp_loss = loss
-
+            if epoch > 10:
+                save_path = os.path.join(arg.save_path, "model_{}_{:.3f}_.pth".format(epoch, loss))
+                torch.save(denoiser, save_path)
+            

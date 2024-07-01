@@ -50,30 +50,32 @@ def train_one_epoch(diffusion, optimizer, dataloader, scaler, scheduler, epoch, 
     optimizer.zero_grad()
     running_loss = 0.0
     
-    for i, (input_img, target_img) in enumerate(dataloader):
-        input_img, target_img = input_img.to(device), target_img.to(device)
-        
-        
+    for i, (target_img, condition_img) in enumerate(dataloader):
+        target_img, condition_img = target_img.to(device), condition_img.to(device)
 
         with amp.autocast():
             # pred noise
-            x_pert, predict_noise, x_denoise, loss = diffusion(input_img, target_img)
+            x_pert, predict_noise, x_denoise, loss = diffusion(target_img, condition_img)
             # get loss
             # loss = F.mse_loss(predict_noise, noise)
         
         scaler.scale(loss).backward()
 
-        if (i + 1) % arg.accumulation_steps == 0:
+        if (i + 1) % arg.accumulation_step == 0:
             # upgrade params
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad()
 
-        running_loss += loss.item() * arg.accumulation_steps
+        running_loss += loss.item() * arg.accumulation_step
+        # if i==10 : break
+        
     
-    diffusion.save_tensor_images(input_img, x_pert, x_denoise, epoch, arg.save_path)
-    
+    diffusion.save_tensor_images(target_img, x_pert, x_denoise, epoch, arg.save_path)
 
+    diffusion.save_generated_samples_into_folder(n_samples=arg.batch_size, condition=condition_img, folder_path=arg.save_path, epoch=epoch)
+
+    # diffusion.simple_sample(n_samples=arg.batch_size, epoch=epoch, save_dir=arg.save_path, condition=condition_img, )
             
     scheduler.step()
     average_loss = running_loss / len(dataloader)

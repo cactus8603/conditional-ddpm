@@ -12,12 +12,14 @@ class ResidualBlock(nn.Module):
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.GELU()
+            nn.GELU(),
+            nn.Dropout(p=0.2)
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.GELU()
+            nn.GELU(),
+            nn.Dropout(p=0.2)
         )
 
         self.handle_channel = nn.Conv2d(in_channels, out_channels, 1, 1, 0)
@@ -64,22 +66,66 @@ class UpwardBlock(nn.Module):
     def forward(self, x, skip_connection):
         return self.model(torch.cat([x, skip_connection], dim=1))
 
-class FCEmbedding(nn.Module):
+class convFCEmbedding(nn.Module):
     def __init__(self, in_dim, out_dim):
-        super(FCEmbedding, self).__init__()
+        super(convFCEmbedding, self).__init__()
         self.in_dim = in_dim
-        layers = nn.Sequential(
+        
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_dim, out_dim, kernel_size=3, stride=1, padding=1),
+            # nn.BatchNorm2d(32),
+            nn.GELU(),
+            # nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(p=0.2)
+            # nn.Conv2d(in_dim, out_dim, kernel_size=3, stride=1, padding=1),
+            # nn.ReLU(),
+            # nn.MaxPool2d(kernel_size=2, stride=2)
+            # nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1),
+            # nn.BatchNorm2d(64),
+            # nn.GELU(),
+            # nn.MaxPool2d(2),
+            # nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+            # nn.BatchNorm2d(128),
+            # nn.GELU(),
+            # nn.MaxPool2d(2),
+
+        )
+
+        self.fc = nn.Sequential(
             nn.Linear(in_dim, out_dim),
             nn.GELU(),
             nn.Linear(out_dim, out_dim)
         )
+
+    def forward(self, x):
+        # print(x.shape)
+        x = self.conv(x) 
+        # print(x.shape)
+        # x = self.fc(x)
+        # print('--------')
+        # x = x.reshape(x.size(0), -1)
+        # x = self.fc(x)
+
+        return x
+
+class FCEmbedding(nn.Module):
+    """Fully Connected Embedding Layer"""
+    def __init__(self, input_dim, hidden_dim):
+        super(FCEmbedding, self).__init__()
+        self.input_dim = input_dim
+        layers = [
+            nn.Linear(input_dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(p=0.2),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(p=0.2),
+        ]
         self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        # x = x.reshape(-1, self.in_dim)
-        print(x.shape)
-        print(self.in_dim)
-        x = x.reshape(x.size(0), self.in_dim)
+        x = x.reshape(-1, self.input_dim)
         return self.model(x)[:, :, None, None]
     
 class CrossAttention(nn.Module):
@@ -121,7 +167,7 @@ class CrossAttention(nn.Module):
         return attn_output
 
 class ContextUNet(nn.Module):
-    def __init__(self, in_channels=1, height=256, width=256, n_feat=32, n_cfeat=5, n_downs=2):
+    def __init__(self, in_channels=1, height=128, width=128, n_feat=64, n_cfeat=32, n_downs=8):
         super(ContextUNet, self).__init__()
         self.in_channels = in_channels
         self.height = height
@@ -142,13 +188,15 @@ class ContextUNet(nn.Module):
         self.to_vec = nn.Sequential(
             nn.AvgPool2d((height//2**len(self.down_blocks), width//2**len(self.down_blocks))), 
             nn.GELU())
+        
         self.up0 = nn.Sequential(
             nn.ConvTranspose2d(
                 2**n_downs * n_feat, 
                 2**n_downs * n_feat, 
                 (height // 2**len(self.down_blocks), width // 2**len(self.down_blocks))),
             nn.GroupNorm(8, 2**n_downs * n_feat),
-            nn.GELU()
+            nn.GELU(), 
+            # nn.Dropout(p=0.2),
         )
         
         # Define upward unet blocks
@@ -161,12 +209,18 @@ class ContextUNet(nn.Module):
             nn.Conv2d(2 * n_feat, n_feat, 3, 1, 1),
             nn.GroupNorm(8, n_feat),
             nn.GELU(),
-            nn.Conv2d(n_feat, in_channels, 1, 1)
+            nn.Conv2d(n_feat, in_channels, 1, 1),
         )
 
         ### original version
         self.timeembs = nn.ModuleList([FCEmbedding(1, 2**i*n_feat) for i in range(n_downs, 0, -1)])
-        self.contextembs = nn.ModuleList([FCEmbedding(n_cfeat, 2**i*n_feat) for i in range(n_downs, 0, -1)])
+        self.contextembs = nn.ModuleList([convFCEmbedding(1 if(i==0) else n_feat*2**i, 2**(i+1)*n_feat) for i in range(n_downs)])
+        # (16, 32), (32, 64), (64, 128), (128, 256)
+        # self.contextembs = nn.ModuleList([convFCEmbedding(i, 2**i*n_feat) for i in range(n_downs, 0, -1)])
+        # 32, 4*32=128
+        # 32, 2*32=64
+
+        # self.contextembs = nn.ModuleList([FCEmbedding(2**(i+1) * n_feat, 2**(i-1) * n_feat) for i in range(n_downs, 0, -1)])
 
         ### add cross attention
         # Define time & context embedding blocks 
@@ -191,10 +245,28 @@ class ContextUNet(nn.Module):
         # target_emb = self.contextembs[0](condition_image).view(condition_image.size(0), -1, 1, 1)  # Reshape context embedding to match feature map size
         # up = self.cross_attention(up, target_emb)
 
+        condition_feature = []
+        # print(self.contextembs)
+        for i, layer in enumerate(self.contextembs):
+            condition_image = layer(condition_image)
+            condition_feature.append(condition_image)
+            # print(condition_image.shape)
+            # (32, 64, 64)
+            # (64, 32, 32)
+            # (128, 16, 16)
+            # (256, 8, 8)
+        # return 
+        
         for i, (up_block, down, contextemb, timeemb) in enumerate(zip(self.up_blocks, downs[::-1], self.contextembs, self.timeembs)):
-            if i == 0:
-                up = up_block(up * contextemb(condition_image) + timeemb(t), down) # fix to this line
-            else:
-                up = up_block(up, down)
-        return self.final_conv(torch.cat([up, downs[0]], axis=1))
+            # print("\nup:", up.shape) # 32, 128, 16, 16
+            # print("time:", timeemb(t).shape) # 32, 128, 1, 1
+            # print("emb:", condition_feature[len(condition_feature)-i-1].shape)
+            # # print("emb:", contextemb(condition_image).shape)
+            # print('---------------')
+            # up = up_block(up * contextemb(condition_image) + timeemb(t), down) # fix to this line
+            up = up_block(up * condition_feature[len(condition_feature)-i-1] + timeemb(t), down) # fix to this line
+            # up = up_block(up + timeemb(t), down)
+        # print("final, up:", up.shape)
+        # print("final, down:", downs[0].shape)
+        return self.final_conv(torch.cat([up, x], axis=1))
 

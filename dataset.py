@@ -22,19 +22,19 @@ class TrainImageDataset(Dataset):
 
         self.transform = transforms.Compose([
             ToPILImage(),
-            Resize((256, 256)), 
+            Resize((128, 128)), 
             Grayscale(num_output_channels = 1),
             ToTensor(),
-            Normalize([0.5], [0.1]),
+            # Normalize([0.5], [0.1]),
             # Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ])
 
         # self.transform = A.Compose([
         #     A.ToTensorV2(),
-        #     A.resize(256, 256, p=1, always_apply=True), 
+        #     A.resize(128, 128, p=1, always_apply=True), 
         #     A.OneOf([
-        #         A.RandomSizedCrop(min_max_height=(128, 128), height=256, width=256, p=0.5),
-        #         A.PadIfNeeded(min_height=256, min_width=256, p=0.5)
+        #         A.RandomSizedCrop(min_max_height=(128, 128), height=128, width=128, p=0.5),
+        #         A.PadIfNeeded(min_height=128, min_width=128, p=0.5)
         #     ], p=1),
         #     A.VerticalFlip(p=0.5),
         #     A.RandomRotate90(p=0.5),
@@ -89,15 +89,15 @@ class ValImageDataset(Dataset):
 
         self.transform = transforms.Compose([
             ToPILImage(),
-            Resize((256, 256)), 
+            Resize((128, 128)), 
             Grayscale(num_output_channels = 1),
             ToTensor(),
-            Normalize([0.5], [0.1]),
+            # Normalize([0.5], [0.1]),
             # Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ])
 
         # self.transform = A.Compose([
-        #     A.resize(256, 256, p=1, always_apply=True), 
+        #     A.resize(128, 128, p=1, always_apply=True), 
         #     A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
         #     A.ToTensorV2()
         # ])
