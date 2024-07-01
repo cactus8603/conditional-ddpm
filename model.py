@@ -77,10 +77,7 @@ class convFCEmbedding(nn.Module):
             nn.GELU(),
             # nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
             nn.MaxPool2d(kernel_size=2, stride=2),
-<<<<<<< HEAD
             nn.Dropout(p=0.2)
-=======
->>>>>>> 4b972075974ad16762fae68982ee60f1d1ab156b
             # nn.Conv2d(in_dim, out_dim, kernel_size=3, stride=1, padding=1),
             # nn.ReLU(),
             # nn.MaxPool2d(kernel_size=2, stride=2)
@@ -120,14 +117,10 @@ class FCEmbedding(nn.Module):
         layers = [
             nn.Linear(input_dim, hidden_dim),
             nn.GELU(),
-<<<<<<< HEAD
             nn.Dropout(p=0.2),
             nn.Linear(hidden_dim, hidden_dim),
             nn.GELU(),
             nn.Dropout(p=0.2),
-=======
-            nn.Linear(hidden_dim, hidden_dim)
->>>>>>> 4b972075974ad16762fae68982ee60f1d1ab156b
         ]
         self.model = nn.Sequential(*layers)
 
@@ -174,11 +167,7 @@ class CrossAttention(nn.Module):
         return attn_output
 
 class ContextUNet(nn.Module):
-<<<<<<< HEAD
     def __init__(self, in_channels=1, height=128, width=128, n_feat=64, n_cfeat=32, n_downs=8):
-=======
-    def __init__(self, in_channels=1, height=128, width=128, n_feat=16, n_cfeat=32, n_downs=4):
->>>>>>> 4b972075974ad16762fae68982ee60f1d1ab156b
         super(ContextUNet, self).__init__()
         self.in_channels = in_channels
         self.height = height
@@ -275,13 +264,8 @@ class ContextUNet(nn.Module):
             # # print("emb:", contextemb(condition_image).shape)
             # print('---------------')
             # up = up_block(up * contextemb(condition_image) + timeemb(t), down) # fix to this line
-<<<<<<< HEAD
             up = up_block(up * condition_feature[len(condition_feature)-i-1] + timeemb(t), down) # fix to this line
             # up = up_block(up + timeemb(t), down)
-=======
-            # up = up_block(up * condition_feature[len(condition_feature)-i-1] + timeemb(t), down) # fix to this line
-            up = up_block(up + timeemb(t), down)
->>>>>>> 4b972075974ad16762fae68982ee60f1d1ab156b
         # print("final, up:", up.shape)
         # print("final, down:", downs[0].shape)
         return self.final_conv(torch.cat([up, x], axis=1))
